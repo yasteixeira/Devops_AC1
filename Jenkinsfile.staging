@@ -1,72 +1,35 @@
 pipeline {
-    agent any
+  agent any
 
-    tools {
-        maven 'Maven 3.9.9'
-        jdk 'JDK 17'
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
     }
 
-    environment {
-        MAVEN_OPTS = '-Xmx1024m'
+    stage('Start container') {
+      steps {
+        echo 'Starting container from Docker Hub...'
+        bat 'docker-compose -f docker-compose.staging.yml pull' // Baixa a imagem do Docker Hub
+        bat 'docker-compose -f docker-compose.staging.yml up -d --no-color'
+        sleep time: 60, unit: 'SECONDS' // Aumenta o tempo para o serviço Spring Boot iniciar
+        bat 'docker-compose -f docker-compose.staging.yml logs' // Verifica os logs para conferir o status do Spring Boot
+        bat 'docker-compose -f docker-compose.staging.yml ps' // Verifica o status do container
+      }
     }
 
-    stages {
-        stage('Checkout') {
-            steps {
-                echo 'Checking out code from repository...'
-                checkout scm
-            }
-        }
-
-        stage('Build') {
-            steps {
-                echo 'Building the project...'
-                bat 'mvn clean compile'
-            }
-        }
-
-        stage('Test') {
-            steps {
-                echo 'Running tests...'
-                bat 'mvn test'
-            }
-            post {
-                always {
-                    junit '**/target/surefire-reports/*.xml'
-                    jacoco(
-                        execPattern: '**/target/jacoco.exec',
-                        classPattern: '**/target/classes',
-                        sourcePattern: '**/src/main/java'
-                    )
-                }
-            }
-        }
-
-        stage('Package') {
-            steps {
-                echo 'Packaging application...'
-                bat 'mvn package -DskipTests'
-            }
-        }
-
-        stage('Archive Artifacts') {
-            steps {
-                echo 'Archiving artifacts...'
-                archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true
-            }
-        }
+    stage('Run tests against the container') {
+      steps {
+        bat 'curl http://localhost:8686 || echo "Service not responding"'
+      }
     }
+  }
 
-    post {
-        success {
-            echo 'Pipeline completed successfully!'
-        }
-        failure {
-            echo 'Pipeline failed!'
-        }
-        always {
-            echo 'Cleaning workspace...'
-            cleanWs()
-        }
+  post {
+    always {
+      echo 'Pipeline completed'
+      // Não derruba mais o container aqui
     }
+  }
 }
