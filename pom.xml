@@ -29,8 +29,17 @@
 	<properties>
 		<java.version>17</java.version>
 		<cucumber.version>7.14.0</cucumber.version>
-		<lombok.version>1.18.36</lombok.version>
+		<lombok.version>edge-SNAPSHOT</lombok.version>
 	</properties>
+	
+	<!-- Adicionar repositório EDGE do Lombok -->
+	<repositories>
+		<repository>
+			<id>projectlombok.org</id>
+			<url>https://projectlombok.org/edge-releases</url>
+		</repository>
+	</repositories>
+	
 	<dependencies>
 		<!-- Spring Boot Web - Para criar REST APIs -->
 		<dependency>
@@ -64,7 +73,7 @@
 			<scope>runtime</scope>
 		</dependency>
 
-		<!-- Lombok - Reduz boilerplate code (@Data, @Builder, etc) -->
+		<!-- Lombok EDGE - Compatível com Java 21+ -->
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
@@ -127,27 +136,14 @@
 				</configuration>
 			</plugin>
 
-			<!-- Maven Compiler Plugin - APENAS UMA VEZ! -->
+			<!-- Maven Compiler Plugin com Lombok EDGE -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
-				<version>3.11.0</version>
+				<version>3.13.0</version>
 				<configuration>
 					<source>17</source>
 					<target>17</target>
-					<fork>true</fork>
-					<compilerArgs>
-						<arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED</arg>
-						<arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED</arg>
-						<arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED</arg>
-						<arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED</arg>
-						<arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED</arg>
-						<arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED</arg>
-						<arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED</arg>
-						<arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED</arg>
-						<arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED</arg>
-						<arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.jvm=ALL-UNNAMED</arg>
-					</compilerArgs>
 					<annotationProcessorPaths>
 						<path>
 							<groupId>org.projectlombok</groupId>
