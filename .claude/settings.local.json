@@ -6,7 +6,10 @@
       "Bash(mvn clean:*)",
       "Bash(mvn test:*)",
       "Bash(mvn jacoco:report:*)",
-      "Bash(mvn verify:*)"
+      "Bash(mvn verify:*)",
+      "Bash(findstr:*)",
+      "Bash(timeout 120 bash -c \"while ! [ -f target/site/jacoco/jacoco.csv ]; do sleep 1; done && cat target/site/jacoco/jacoco.csv | head -20\":*)",
+      "Bash(timeout 10 cat:*)"
     ],
     "deny": [],
     "ask": []
