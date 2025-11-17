@@ -3,7 +3,10 @@
     "allow": [
       "Bash(git add:*)",
       "Bash(mvn clean test:*)",
-      "Bash(mvn clean:*)"
+      "Bash(mvn clean:*)",
+      "Bash(mvn test:*)",
+      "Bash(mvn jacoco:report:*)",
+      "Bash(mvn verify:*)"
     ],
     "deny": [],
     "ask": []
