@@ -1,0 +1,213 @@
+pipeline {
+    agent any
+
+    // Variáveis de ambiente
+    environment {
+        // Configurações do Maven
+        MAVEN_HOME = tool 'Maven'
+        PATH = "${MAVEN_HOME}/bin:${env.PATH}"
+
+        // Configurações do Docker
+        DOCKER_IMAGE = 'pratica4-app'
+        DOCKER_TAG = "${env.BUILD_NUMBER}"
+        DOCKER_REGISTRY = 'docker.io'
+        DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
+
+        // Threshold de cobertura (99%)
+        COVERAGE_THRESHOLD = '99'
+    }
+
+    stages {
+        // Stage 1: Checkout do código
+        stage('Checkout') {
+            steps {
+                echo '========== Stage 1: Checkout do código =========='
+                checkout scm
+                echo 'Código baixado com sucesso!'
+            }
+        }
+
+        // Stage 2: Build da aplicação
+        stage('Build') {
+            steps {
+                echo '========== Stage 2: Build (Compilação) =========='
+                script {
+                    if (isUnix()) {
+                        sh 'mvn clean compile'
+                    } else {
+                        bat 'mvn clean compile'
+                    }
+                }
+                echo 'Build concluído com sucesso!'
+            }
+        }
+
+        // Stage 3: Testes unitários e integração
+        stage('Test') {
+            steps {
+                echo '========== Stage 3: Executando testes =========='
+                script {
+                    if (isUnix()) {
+                        sh 'mvn test'
+                    } else {
+                        bat 'mvn test'
+                    }
+                }
+                echo 'Testes executados com sucesso!'
+            }
+        }
+
+        // Stage 4: Análise de código com PMD
+        stage('Code Analysis') {
+            steps {
+                echo '========== Stage 4: Análise estática de código (PMD) =========='
+                script {
+                    if (isUnix()) {
+                        sh 'mvn pmd:pmd pmd:cpd'
+                    } else {
+                        bat 'mvn pmd:pmd pmd:cpd'
+                    }
+                }
+                echo 'Análise de código concluída!'
+            }
+        }
+
+        // Stage 5: Relatório de cobertura (JaCoCo)
+        stage('Coverage Report') {
+            steps {
+                echo '========== Stage 5: Gerando relatório de cobertura (JaCoCo) =========='
+                script {
+                    if (isUnix()) {
+                        sh 'mvn jacoco:report'
+                    } else {
+                        bat 'mvn jacoco:report'
+                    }
+                }
+
+                // Publica relatório JaCoCo
+                jacoco(
+                    execPattern: '**/target/jacoco.exec',
+                    classPattern: '**/target/classes',
+                    sourcePattern: '**/src/main/java',
+                    exclusionPattern: '**/test/**'
+                )
+
+                echo 'Relatório de cobertura gerado!'
+            }
+        }
+
+        // Stage 6: Quality Gate (verifica cobertura mínima)
+        stage('Quality Gate') {
+            steps {
+                echo "========== Stage 6: Quality Gate (Cobertura >= ${COVERAGE_THRESHOLD}%) =========="
+                script {
+                    // Executa verificação de cobertura
+                    def result
+                    if (isUnix()) {
+                        result = sh(script: 'mvn jacoco:check', returnStatus: true)
+                    } else {
+                        result = bat(script: 'mvn jacoco:check', returnStatus: true)
+                    }
+
+                    if (result != 0) {
+                        error("Quality Gate FALHOU! Cobertura de código abaixo de ${COVERAGE_THRESHOLD}%")
+                    }
+                }
+                echo "Quality Gate PASSOU! Cobertura >= ${COVERAGE_THRESHOLD}%"
+            }
+        }
+
+        // Stage 7: Build Docker Image (só executa se Quality Gate passar)
+        stage('Build Docker Image') {
+            steps {
+                echo '========== Stage 7: Construindo imagem Docker =========='
+                script {
+                    // Build da aplicação com package
+                    if (isUnix()) {
+                        sh 'mvn package -DskipTests'
+                    } else {
+                        bat 'mvn package -DskipTests'
+                    }
+
+                    // Build da imagem Docker
+                    if (isUnix()) {
+                        sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
+                        sh "docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest"
+                    } else {
+                        bat "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
+                        bat "docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest"
+                    }
+                }
+                echo "Imagem Docker ${DOCKER_IMAGE}:${DOCKER_TAG} criada com sucesso!"
+            }
+        }
+
+        // Stage 8: Push Docker Image
+        stage('Push Docker Image') {
+            steps {
+                echo '========== Stage 8: Enviando imagem para Docker Registry =========='
+                script {
+                    // Tenta fazer push da imagem
+                    try {
+                        withCredentials([usernamePassword(
+                            credentialsId: DOCKER_CREDENTIALS_ID,
+                            usernameVariable: 'DOCKER_USER',
+                            passwordVariable: 'DOCKER_PASS'
+                        )]) {
+                            if (isUnix()) {
+                                sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                                sh "docker push ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                                sh "docker push ${DOCKER_IMAGE}:latest"
+                            } else {
+                                bat 'echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin'
+                                bat "docker push ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                                bat "docker push ${DOCKER_IMAGE}:latest"
+                            }
+                        }
+                        echo 'Imagem enviada com sucesso para o registry!'
+                    } catch (Exception e) {
+                        echo "AVISO: Falha ao enviar imagem para registry: ${e.message}"
+                        echo 'Continuando pipeline (credenciais Docker podem não estar configuradas)'
+                        currentBuild.result = 'SUCCESS'
+                    }
+                }
+            }
+        }
+    }
+
+    // Post actions (executam sempre após os stages)
+    post {
+        always {
+            echo '========== Post Actions: Publicando relatórios =========='
+
+            // Publica relatórios de teste JUnit
+            junit '**/target/surefire-reports/*.xml'
+
+            // Publica relatório PMD
+            recordIssues(
+                enabledForFailure: true,
+                tools: [pmdParser(pattern: '**/target/pmd.xml')]
+            )
+
+            echo 'Relatórios publicados!'
+        }
+
+        success {
+            echo '=========================================='
+            echo '  PIPELINE CONCLUÍDO COM SUCESSO! ✅'
+            echo '=========================================='
+            echo "Build: #${env.BUILD_NUMBER}"
+            echo "Cobertura: >= ${COVERAGE_THRESHOLD}%"
+            echo "Imagem Docker: ${DOCKER_IMAGE}:${DOCKER_TAG}"
+            echo '=========================================='
+        }
+
+        failure {
+            echo '=========================================='
+            echo '  PIPELINE FALHOU! ❌'
+            echo '=========================================='
+            echo 'Verifique os logs acima para detalhes'
+            echo '=========================================='
+        }
+    }
+}

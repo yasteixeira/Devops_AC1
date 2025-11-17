@@ -1,0 +1,74 @@
+version: '3.8'
+
+# ========================================
+# DOCKER COMPOSE - PRODUÇÃO
+# ========================================
+# Para executar: docker-compose -f docker-compose.prod.yml up -d
+
+services:
+  # Banco de Dados PostgreSQL
+  postgres:
+    image: postgres:16-alpine
+    container_name: pratica4-postgres
+    environment:
+      - POSTGRES_DB=pratica4_prod
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - pratica4-network
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Aplicação Spring Boot
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pratica4-app-prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      # Profile ativo
+      - SPRING_PROFILES_ACTIVE=prod
+      # Configurações do PostgreSQL
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/pratica4_prod
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=postgres123
+      # JPA
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_JPA_SHOW_SQL=false
+      # Configurações de segurança
+      - SERVER_ERROR_INCLUDE_STACKTRACE=never
+      - SERVER_ERROR_INCLUDE_MESSAGE=always
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - pratica4-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+networks:
+  pratica4-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+    driver: local
+  logs:
+    driver: local
