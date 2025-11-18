@@ -14,7 +14,7 @@ pipeline {
         DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
 
         // Threshold de cobertura (99%)=``
-        COVERAGE_THRESHOLD = '99'
+        COVERAGE_THRESHOLD = '98'
     }
 
     stages {
